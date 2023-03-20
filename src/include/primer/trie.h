@@ -68,6 +68,17 @@ class TrieNode {
 
   // You can add additional fields and methods here. But in general, you don't need to add extra fields to
   // complete this project.
+
+  // 我的辅助函数
+  // ------------
+
+  template <class T>
+  auto Get(std::string_view key, size_t index) const -> const T *;
+
+  // todo
+  // Fix double copy
+  template <class T>
+  auto Put(std::string_view key, size_t index, std::shared_ptr<T> value) const -> std::unique_ptr<TrieNode>;
 };
 
 // A TrieNodeWithValue is a TrieNode that also has a value of type T associated with it.
