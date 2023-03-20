@@ -319,6 +319,21 @@ select * from temp_1 t1 inner join test_simple_seq_2 seq on t1.colA = seq.col2 ;
 18 9 666 86073 8 18
 19 3 701 34675 9 19
 
+query rowsort +ensure:nlj_init_check
+select * from temp_2 t2 inner join test_simple_seq_2 seq on t2.colA = seq.col2 ;
+----
+10 290 0 0 10
+11 878 1 1 11
+12 170 2 2 12
+13 332 3 3 13
+14 680 4 4 14
+15 2 5 5 15
+16 552 6 6 16
+17 561 7 7 17
+18 398 8 8 18
+19 974 9 9 19
+
+
 query rowsort
 select * from __mock_table_1 m1 inner join temp_1 t1 on t1.colA = m1.colB;
 ----
@@ -329,6 +344,12 @@ query rowsort +ensure:nlj_init_check
 select * from temp_1 t1 inner join temp_2 t2 on t1.colD = t2.colA;
 ----
 60 5 4347 34 34 311 4
+
+
+query rowsort ensure:nlj_init_check
+select * from __mock_table_1 m1 inner join temp_2 t2 on t2.colA = m1.colB;
+----
+0 0 0 142 0
 
 
 # Non-eq condition
@@ -363,6 +384,26 @@ create table t2(v1 int, v2 int);
 statement ok
 insert into t2 values (0, 45), (0, 45), (0, 65), (1, 45), (1, 45), (1, 65), (2, 45);
 
+statement ok
+create table t3(v1 int, v2 int);
+
+statement ok
+insert into t3 values 
+    (0, 1),
+    (1, 1),
+    (2, 1),
+    (3, 1),
+    (4, 1),
+    (5, 1),
+    (6, 1),
+    (0, 2),
+    (1, 2),
+    (2, 2),
+    (3, 2),
+    (4, 2),
+    (5, 2),
+    (6, 2);
+
 query rowsort +ensure:nlj_init_check
 select * from temp_2 inner join t2 on v2 = colA;
 ----
@@ -373,6 +414,82 @@ select * from temp_2 inner join t2 on v2 = colA;
 45 518 5 1 45
 65 156 5 1 65
 45 518 5 2 45
+
+
+query rowsort +ensure:nlj_init_check
+select * from t3 inner join t3 temp on t3.v1 = temp.v2;
+----
+1 1 0 1
+1 2 0 1
+1 1 1 1
+1 2 1 1
+1 1 2 1
+1 2 2 1
+1 1 3 1
+1 2 3 1
+1 1 4 1
+1 2 4 1
+1 1 5 1
+1 2 5 1
+1 1 6 1
+1 2 6 1
+2 1 0 2
+2 2 0 2
+2 1 1 2
+2 2 1 2
+2 1 2 2
+2 2 2 2
+2 1 3 2
+2 2 3 2
+2 1 4 2
+2 2 4 2
+2 1 5 2
+2 2 5 2
+2 1 6 2
+2 2 6 2
+
+
+query rowsort +ensure:nlj_init_check
+select * from t3 left join t3 temp on t3.v1 = temp.v2;
+----
+1 1 0 1
+1 2 0 1
+1 1 1 1
+1 2 1 1
+1 1 2 1
+1 2 2 1
+1 1 3 1
+1 2 3 1
+1 1 4 1
+1 2 4 1
+1 1 5 1
+1 2 5 1
+1 1 6 1
+1 2 6 1
+2 1 0 2
+2 2 0 2
+2 1 1 2
+2 2 1 2
+2 1 2 2
+2 2 2 2
+2 1 3 2
+2 2 3 2
+2 1 4 2
+2 2 4 2
+2 1 5 2
+2 2 5 2
+2 1 6 2
+2 2 6 2
+6 1 integer_null integer_null
+6 2 integer_null integer_null
+5 1 integer_null integer_null
+5 2 integer_null integer_null
+3 1 integer_null integer_null
+3 2 integer_null integer_null
+4 1 integer_null integer_null
+4 2 integer_null integer_null
+0 1 integer_null integer_null
+0 2 integer_null integer_null
 
 
 query rowsort +ensure:nlj_init_check
@@ -390,6 +507,33 @@ select * from temp_3 t3 inner join temp_2 t2 on t3.colB = t2.colA;
 16 52 52 276 2
 18 38 38 194 8
 
+
+query rowsort +ensure:nlj_init_check
+select * from temp_3 t3 left join temp_2 t2 on t3.colB = t2.colA;
+----
+5 29 29 538 9
+6 52 52 276 2
+3 52 52 276 2
+7 88 88 241 8
+8 14 14 680 4
+9 52 52 276 2
+12 17 17 561 7
+13 52 52 276 2
+15 2 2 837 2
+16 52 52 276 2
+18 38 38 194 8
+20 739 integer_null integer_null integer_null
+19 974 integer_null integer_null integer_null
+17 561 integer_null integer_null integer_null
+14 680 integer_null integer_null integer_null
+1 993 integer_null integer_null integer_null
+4 240 integer_null integer_null integer_null
+10 290 integer_null integer_null integer_null
+2 837 integer_null integer_null integer_null
+11 878 integer_null integer_null integer_null
+0 142 integer_null integer_null integer_null
+
+
 query rowsort +ensure:nlj_init_check
 select * from
     (select * from temp_2 where colB < 10) t2 inner join
@@ -398,3 +542,33 @@ select * from
 ----
 15 2 5 34
 50 8 0 34
+
+
+# Composite Key
+query rowsort +ensure:nlj_init_check
+select * from temp_1 t1 inner join temp_2 t2 on t1.colB = t2.colA and t1.colA = t2.colC ;
+----
+8 8 3074 56174 8 194 8
+
+
+query rowsort +ensure:nlj_init_check
+select * from temp_1 t1 inner join temp_2 t2 on t1.colC = t2.colB and t1.colB = t2.colC;
+----
+6 2 170 92798 12 170 2
+10 8 398 60977 18 398 8
+19 3 701 34675 33 701 3
+
+
+# Switch left and right table column expressions
+query rowsort +ensure:nlj_init_check
+select * from temp_1 t1 inner join temp_2 t2 on t1.colB = t2.colA and t2.colC = t1.colA ;
+----
+8 8 3074 56174 8 194 8
+
+
+query rowsort +ensure:nlj_init_check
+select * from temp_1 t1 inner join temp_2 t2 on t1.colC = t2.colB and t2.colC = t1.colB ;
+----
+6 2 170 92798 12 170 2
+10 8 398 60977 18 398 8
+19 3 701 34675 33 701 3
