@@ -243,3 +243,7 @@ docs/dev
 
 # Submission zip files
 *.zip
+*.gz
+
+# Database files
+*.db
