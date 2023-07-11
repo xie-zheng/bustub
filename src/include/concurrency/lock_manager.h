@@ -23,6 +23,7 @@
 #include <vector>
 
 #include "common/config.h"
+#include "common/macros.h"
 #include "common/rid.h"
 #include "concurrency/transaction.h"
 
@@ -64,7 +65,7 @@ class LockManager {
   class LockRequestQueue {
    public:
     /** List of lock requests for the same resource (table or row) */
-    std::list<LockRequest *> request_queue_;
+    std::list<std::shared_ptr<LockRequest>> request_queue_;
     /** For notifying blocked transactions on this rid */
     std::condition_variable cv_;
     /** txn_id of an upgrading transaction (if any) */
@@ -76,15 +77,23 @@ class LockManager {
   /**
    * Creates a new lock manager configured for the deadlock detection policy.
    */
-  LockManager() {
+  LockManager() = default;
+
+  void StartDeadlockDetection() {
+    BUSTUB_ENSURE(txn_manager_ != nullptr, "txn_manager_ is not set.")
     enable_cycle_detection_ = true;
     cycle_detection_thread_ = new std::thread(&LockManager::RunCycleDetection, this);
   }
 
   ~LockManager() {
+    UnlockAll();
+
     enable_cycle_detection_ = false;
-    cycle_detection_thread_->join();
-    delete cycle_detection_thread_;
+
+    if (cycle_detection_thread_ != nullptr) {
+      cycle_detection_thread_->join();
+      delete cycle_detection_thread_;
+    }
   }
 
   /**
@@ -145,8 +154,12 @@ class LockManager {
    *    - If requested lock mode is the same as that of the lock presently held,
    *      Lock() should return true since it already has the lock.
    *    - If requested lock mode is different, Lock() should upgrade the lock held by the transaction.
+   *    - Basically there should be three steps to perform a lock upgrade in general
+   *      - 1. Check the precondition of upgrade
+   *      - 2. Drop the current lock, reserve the upgrade position
+   *      - 3. Wait to get the new lock granted
    *
-   *    A lock request being upgraded should be prioritised over other waiting lock requests on the same resource.
+   *    A lock request being upgraded should be prioritized over other waiting lock requests on the same resource.
    *
    *    While upgrading, only the following transitions should be allowed:
    *        IS -> [S, X, IX, SIX]
@@ -164,6 +177,9 @@ class LockManager {
    * BOOK KEEPING:
    *    If a lock is granted to a transaction, lock manager should update its
    *    lock sets appropriately (check transaction.h)
+   *
+   *    You probably want to consider which type of lock to directly apply on table
+   *    when implementing executor later
    */
 
   /**
@@ -298,8 +314,22 @@ class LockManager {
    */
   auto RunCycleDetection() -> void;
 
+  TransactionManager *txn_manager_;
+
  private:
-  /** Fall 2022 */
+  /** Spring 2023 */
+  /* You are allowed to modify all functions below. */
+  auto UpgradeLockTable(Transaction *txn, LockMode lock_mode, const table_oid_t &oid) -> bool;
+  auto UpgradeLockRow(Transaction *txn, LockMode lock_mode, const table_oid_t &oid, const RID &rid) -> bool;
+  auto AreLocksCompatible(LockMode l1, LockMode l2) -> bool;
+  auto CanTxnTakeLock(Transaction *txn, LockMode lock_mode) -> bool;
+  void GrantNewLocksIfPossible(LockRequestQueue *lock_request_queue);
+  auto CanLockUpgrade(LockMode curr_lock_mode, LockMode requested_lock_mode) -> bool;
+  auto CheckAppropriateLockOnTable(Transaction *txn, const table_oid_t &oid, LockMode row_lock_mode) -> bool;
+  auto FindCycle(txn_id_t source_txn, std::vector<txn_id_t> &path, std::unordered_set<txn_id_t> &on_path,
+                 std::unordered_set<txn_id_t> &visited, txn_id_t *abort_txn_id) -> bool;
+  void UnlockAll();
+
   /** Structure that holds lock requests for a given table oid */
   std::unordered_map<table_oid_t, std::shared_ptr<LockRequestQueue>> table_lock_map_;
   /** Coordination */
@@ -318,3 +348,30 @@ class LockManager {
 };
 
 }  // namespace bustub
+
+template <>
+struct fmt::formatter<bustub::LockManager::LockMode> : formatter<std::string_view> {
+  // parse is inherited from formatter<string_view>.
+  template <typename FormatContext>
+  auto format(bustub::LockManager::LockMode x, FormatContext &ctx) const {
+    string_view name = "unknown";
+    switch (x) {
+      case bustub::LockManager::LockMode::EXCLUSIVE:
+        name = "EXCLUSIVE";
+        break;
+      case bustub::LockManager::LockMode::INTENTION_EXCLUSIVE:
+        name = "INTENTION_EXCLUSIVE";
+        break;
+      case bustub::LockManager::LockMode::SHARED:
+        name = "SHARED";
+        break;
+      case bustub::LockManager::LockMode::INTENTION_SHARED:
+        name = "INTENTION_SHARED";
+        break;
+      case bustub::LockManager::LockMode::SHARED_INTENTION_EXCLUSIVE:
+        name = "SHARED_INTENTION_EXCLUSIVE";
+        break;
+    }
+    return formatter<string_view>::format(name, ctx);
+  }
+};
