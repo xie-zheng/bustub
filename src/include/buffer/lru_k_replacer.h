@@ -38,7 +38,7 @@ class LRUKNode {
   LRUKNode() = default;
   LRUKNode(frame_id_t fid, size_t k, size_t timestamp) : k_(k), fid_(fid) { history_.push_front(timestamp); }
 
-  /* 记录新的一次访问时间 
+  /* 记录新的一次访问时间
    * 如果需要进lru了，返回true 否则false */
   auto Access(size_t timestamp) -> bool {
     bool pre = is_lru_;
@@ -165,7 +165,7 @@ class LRUKReplacer {
   auto Size() -> size_t;
 
  private:
-  /* 所有Frame都先进到fifo队列 
+  /* 所有Frame都先进到fifo队列
    * 访问超过k次以后进入LRU队列 */
   std::list<frame_id_t> fifo_;
 
@@ -175,13 +175,12 @@ class LRUKReplacer {
 
   /* 实际数据存储位置 */
   std::unordered_map<frame_id_t, LRUKNode> node_store_;
-  
+
   size_t current_timestamp_{0};
   size_t curr_size_{0};
   size_t replacer_size_;
   size_t k_;
   std::mutex latch_;
-
 };
 
 }  // namespace bustub

@@ -20,13 +20,13 @@ namespace bustub {
 
 LRUKReplacer::LRUKReplacer(size_t num_frames, size_t k) : replacer_size_(num_frames), k_(k) {}
 
-auto LRUKReplacer::Evict(frame_id_t *frame_id) -> bool { 
+auto LRUKReplacer::Evict(frame_id_t *frame_id) -> bool {
   std::lock_guard<std::mutex> guard(latch_);
-  
+
   if (curr_size_ == 0) {
-    return false; 
+    return false;
   }
-  
+
   /* check fifo */
   frame_id_t target = 0;
   for (auto it : fifo_) {
@@ -43,7 +43,7 @@ auto LRUKReplacer::Evict(frame_id_t *frame_id) -> bool {
         target = it;
         break;
       }
-    }  
+    }
   }
 
   *frame_id = target;
@@ -59,7 +59,6 @@ auto LRUKReplacer::Evict(frame_id_t *frame_id) -> bool {
   curr_size_--;
   return true;
 }
-
 
 void LRUKReplacer::RecordAccess(frame_id_t frame_id, AccessType access_type) {
   std::lock_guard<std::mutex> guard(latch_);
@@ -86,20 +85,18 @@ void LRUKReplacer::RecordAccess(frame_id_t frame_id, AccessType access_type) {
     /* 更新时间戳，如果超过k次就放进lru */
     bool can_lru = node_store_[frame_id].Access(current_timestamp_++);
     if (can_lru) {
-        /* 从fifo中删除 */
-        fifo_.remove(frame_id);
-        /* 放入lru中 */
-        lru_.push_back(frame_id);
-        lru_map_[frame_id] = --lru_.end();
+      /* 从fifo中删除 */
+      fifo_.remove(frame_id);
+      /* 放入lru中 */
+      lru_.push_back(frame_id);
+      lru_map_[frame_id] = --lru_.end();
     }
-    
   }
 }
 
-
 void LRUKReplacer::SetEvictable(frame_id_t frame_id, bool set_evictable) {
   BUSTUB_ASSERT(frame_id < (int32_t)replacer_size_, "Invalid frame_id: larger than replacer_size_");
-  
+
   std::lock_guard<std::mutex> guard(latch_);
 
   if (node_store_[frame_id].is_evictable_) {
