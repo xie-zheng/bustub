@@ -12,6 +12,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <limits>
 #include <list>
 #include <mutex>  // NOLINT
@@ -26,14 +27,30 @@ namespace bustub {
 enum class AccessType { Unknown = 0, Get, Scan };
 
 class LRUKNode {
- private:
+ public:
   /** History of last seen K timestamps of this page. Least recent timestamp stored in front. */
-  // Remove maybe_unused if you start using them. Feel free to change the member variables as you want.
+  std::list<size_t> history_;
+  size_t k_;
+  frame_id_t fid_;
+  bool is_evictable_{false};
+  bool is_lru_{false};
 
-  [[maybe_unused]] std::list<size_t> history_;
-  [[maybe_unused]] size_t k_;
-  [[maybe_unused]] frame_id_t fid_;
-  [[maybe_unused]] bool is_evictable_{false};
+  LRUKNode() = default;
+  LRUKNode(frame_id_t fid, size_t k, size_t timestamp) : k_(k), fid_(fid) { history_.push_front(timestamp); }
+
+  /* 记录新的一次访问时间 
+   * 如果需要进lru了，返回true 否则false */
+  auto Access(size_t timestamp) -> bool {
+    bool pre = is_lru_;
+    history_.push_back(timestamp);
+    if (history_.size() == k_) {
+      is_lru_ = true;
+    }
+    if (history_.size() > k_) {
+      history_.pop_front();
+    }
+    return !pre && is_lru_;
+  }
 };
 
 /**
@@ -148,14 +165,23 @@ class LRUKReplacer {
   auto Size() -> size_t;
 
  private:
-  // TODO(student): implement me! You can replace these member variables as you like.
-  // Remove maybe_unused if you start using them.
-  [[maybe_unused]] std::unordered_map<frame_id_t, LRUKNode> node_store_;
-  [[maybe_unused]] size_t current_timestamp_{0};
-  [[maybe_unused]] size_t curr_size_{0};
-  [[maybe_unused]] size_t replacer_size_;
-  [[maybe_unused]] size_t k_;
-  [[maybe_unused]] std::mutex latch_;
+  /* 所有Frame都先进到fifo队列 
+   * 访问超过k次以后进入LRU队列 */
+  std::list<frame_id_t> fifo_;
+
+  /* LRU队列 */
+  std::unordered_map<frame_id_t, std::list<frame_id_t>::iterator> lru_map_;
+  std::list<frame_id_t> lru_;
+
+  /* 实际数据存储位置 */
+  std::unordered_map<frame_id_t, LRUKNode> node_store_;
+  
+  size_t current_timestamp_{0};
+  size_t curr_size_{0};
+  size_t replacer_size_;
+  size_t k_;
+  std::mutex latch_;
+
 };
 
 }  // namespace bustub
