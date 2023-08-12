@@ -208,5 +208,40 @@ class BufferPoolManager {
   }
 
   // TODO(student): You may add additional private members and helper functions
+
+  /**
+   * @brief 得到一个干净的Page Frame用以写入数据
+   * @param *frame_id 用于写入得到的Page Frame的frame_id
+   * @return 是否成功
+   */
+  auto GetCleanPage(frame_id_t *frame_id) -> bool {
+    if (free_list_.empty() && replacer_->Size() == 0) {
+      return false;
+    }
+
+    Page *page;
+    if (!free_list_.empty()) {
+      // 空白页不需要做其他操作
+      *frame_id = free_list_.front();
+      free_list_.pop_front();
+      page = &pages_[*frame_id];
+    } else {
+      replacer_->Evict(frame_id);
+      page = &pages_[*frame_id];
+      page_table_.erase(page->page_id_);
+      // 有可能是脏页(free_list_中都是干净的页)
+      if (page->is_dirty_) {
+        disk_manager_->WritePage(page->page_id_, page->data_);
+      }
+    }
+
+    // 初始化
+    page->ResetMemory();
+    page->page_id_ = INVALID_PAGE_ID;
+    page->pin_count_ = 1;
+    page->is_dirty_ = false;
+
+    return true;
+  }
 };
 }  // namespace bustub

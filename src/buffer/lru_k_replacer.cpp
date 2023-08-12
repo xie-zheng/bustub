@@ -72,13 +72,6 @@ void LRUKReplacer::RecordAccess(frame_id_t frame_id, AccessType access_type) {
 
   /* check if the frame is in the buffter */
   if (node_store_.count(frame_id) == 0) {
-    /* LRU已满,需要Evict一个frame 
-	   这个逻辑似乎没有要求实现? */
-    if (curr_size_ == replacer_size_) {
-      frame_id_t evict;
-      Evict(&evict);
-    }
-
     /* 新增frame,先进fifo队列 */
     fifo_.push_back(frame_id);
     node_store_[frame_id] = LRUKNode(frame_id, k_, current_timestamp_++);
