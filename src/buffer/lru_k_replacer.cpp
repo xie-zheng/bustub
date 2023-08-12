@@ -27,9 +27,16 @@ auto LRUKReplacer::Evict(frame_id_t *frame_id) -> bool {
     return false;
   }
 
-  /* check fifo */
+  /* always check fifo first */
   frame_id_t target = 0;
   for (auto it : fifo_) {
+    /* Pined Page 也放在实际存储的地方,
+     * 这种情况多了对效率影响很大,
+     * 但把Pined的Page在set_evictable的时候再插入其实好像
+     * 也不太方便.
+     *
+     * TODO: 优化
+     * */
     if (node_store_[it].is_evictable_) {
       target = it;
       break;
@@ -65,7 +72,8 @@ void LRUKReplacer::RecordAccess(frame_id_t frame_id, AccessType access_type) {
 
   /* check if the frame is in the buffter */
   if (node_store_.count(frame_id) == 0) {
-    /* LRU已满,需要Evict一个frame */
+    /* LRU已满,需要Evict一个frame 
+	   这个逻辑似乎没有要求实现? */
     if (curr_size_ == replacer_size_) {
       frame_id_t evict;
       Evict(&evict);
