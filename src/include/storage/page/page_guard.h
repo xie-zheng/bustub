@@ -212,6 +212,8 @@ class WritePageGuard {
  private:
   // You may choose to get rid of this and add your own private variables.
   BasicPageGuard guard_;
+  /* only one thread can write to the page */
+  std::mutex latch_;
 };
 
 }  // namespace bustub
