@@ -11,8 +11,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "buffer/buffer_pool_manager.h"
-#include <mutex>
-
 #include "common/config.h"
 #include "common/exception.h"
 #include "common/macros.h"
@@ -37,7 +35,7 @@ BufferPoolManager::~BufferPoolManager() { delete[] pages_; }
 
 // 分配一个新Page并把对应的page_id写回
 auto BufferPoolManager::NewPage(page_id_t *page_id) -> Page * {
-  std::lock_guard<std::mutex> guard(latch_);
+  std::scoped_lock guard(latch_);
 
   frame_id_t fid;
   if (!GetCleanPage(&fid)) {
@@ -57,10 +55,10 @@ auto BufferPoolManager::NewPage(page_id_t *page_id) -> Page * {
 }
 
 auto BufferPoolManager::FetchPage(page_id_t page_id, [[maybe_unused]] AccessType access_type) -> Page * {
-  std::lock_guard<std::mutex> guard(latch_);
+  std::scoped_lock guard(latch_);
 
   frame_id_t fid;
-  Page *page;
+  Page *page = nullptr;
 
   // 在buffer_pool中寻找对应page,
   // 没有的话需要从磁盘载入
@@ -72,21 +70,23 @@ auto BufferPoolManager::FetchPage(page_id_t page_id, [[maybe_unused]] AccessType
     page = &pages_[fid];
     page->page_id_ = page_id;
     page_table_[page_id] = fid;
-    disk_manager_->ReadPage(page_id, page->data_);
+    disk_manager_->ReadPage(page_id, page->GetData());
   } else {
     // 已经在buffer_pool中,
     // 直接返回这个page frame即可
     fid = page_table_[page_id];
     page = &pages_[fid];
+    page->pin_count_ += 1;
   }
 
   replacer_->RecordAccess(fid);
+  replacer_->SetEvictable(fid, false);
 
   return page;
 }
 
 auto BufferPoolManager::UnpinPage(page_id_t page_id, bool is_dirty, [[maybe_unused]] AccessType access_type) -> bool {
-  std::lock_guard<std::mutex> guard(latch_);
+  std::scoped_lock guard(latch_);
 
   if (page_table_.count(page_id) == 0) {
     return false;
@@ -95,20 +95,23 @@ auto BufferPoolManager::UnpinPage(page_id_t page_id, bool is_dirty, [[maybe_unus
   auto fid = page_table_[page_id];
   auto page = &pages_[fid];
 
-  if (page->pin_count_ == 0) {
+  // before this unpin
+  if (page->pin_count_ <= 0) {
     return false;
   }
+  // after this unpin
+  if (--page->pin_count_ == 0) {
+    replacer_->SetEvictable(fid, true);
+  }
 
-  page->pin_count_ -= 1;
-  page->is_dirty_ = is_dirty;
-  replacer_->SetEvictable(fid, true);
+  if (is_dirty) {
+    page->is_dirty_ = true;
+  }
 
   return true;
 }
 
-auto BufferPoolManager::FlushPage(page_id_t page_id) -> bool {
-  std::lock_guard<std::mutex> guard(latch_);
-
+auto BufferPoolManager::FlushPageImpl(page_id_t page_id) -> bool {
   // 不在pool中 -> 直接return
   if (page_table_.count(page_id) == 0) {
     return false;
@@ -119,19 +122,25 @@ auto BufferPoolManager::FlushPage(page_id_t page_id) -> bool {
   disk_manager_->WritePage(page_id, pages_[fid].data_);
   pages_[fid].is_dirty_ = false;
 
-  replacer_->RecordAccess(fid);
+  // replacer_->RecordAccess(fid);
 
   return true;
 }
 
+auto BufferPoolManager::FlushPage(page_id_t page_id) -> bool {
+  std::scoped_lock guard(latch_);
+  return FlushPageImpl(page_id);
+}
+
 void BufferPoolManager::FlushAllPages() {
+  std::scoped_lock guard(latch_);
   for (auto [pid, fid] : page_table_) {
-    FlushPage(pid);
+    FlushPageImpl(pid);
   }
 }
 
 auto BufferPoolManager::DeletePage(page_id_t page_id) -> bool {
-  std::lock_guard<std::mutex> guard(latch_);
+  std::scoped_lock guard(latch_);
 
   // If page_id is not in the buffer pool,
   // do nothing and return true.
@@ -164,9 +173,17 @@ auto BufferPoolManager::AllocatePage() -> page_id_t { return next_page_id_++; }
 
 auto BufferPoolManager::FetchPageBasic(page_id_t page_id) -> BasicPageGuard { return {this, FetchPage(page_id)}; }
 
-auto BufferPoolManager::FetchPageRead(page_id_t page_id) -> ReadPageGuard { return {this, FetchPage(page_id)}; }
+auto BufferPoolManager::FetchPageRead(page_id_t page_id) -> ReadPageGuard {
+  auto page = FetchPage(page_id);
+  page->RLatch();
+  return {this, page};
+}
 
-auto BufferPoolManager::FetchPageWrite(page_id_t page_id) -> WritePageGuard { return {this, FetchPage(page_id)}; }
+auto BufferPoolManager::FetchPageWrite(page_id_t page_id) -> WritePageGuard {
+  auto page = FetchPage(page_id);
+  page->WLatch();
+  return {this, page};
+}
 
 auto BufferPoolManager::NewPageGuarded(page_id_t *page_id) -> BasicPageGuard { return {this, NewPage(page_id)}; }
 

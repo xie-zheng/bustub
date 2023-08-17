@@ -1,6 +1,5 @@
 #include "storage/page/page_guard.h"
 #include <algorithm>
-#include <mutex>
 #include "buffer/buffer_pool_manager.h"
 
 namespace bustub {
@@ -23,6 +22,9 @@ void BasicPageGuard::Drop() {
 }
 
 auto BasicPageGuard::operator=(BasicPageGuard &&that) noexcept -> BasicPageGuard & {
+  if (this == &that) {
+    return *this;
+  }
   Drop();
 
   bpm_ = that.bpm_;
@@ -38,36 +40,50 @@ auto BasicPageGuard::operator=(BasicPageGuard &&that) noexcept -> BasicPageGuard
 
 BasicPageGuard::~BasicPageGuard() { Drop(); };  // NOLINT
 
-ReadPageGuard::ReadPageGuard(ReadPageGuard &&that) noexcept = default;
+ReadPageGuard::ReadPageGuard(ReadPageGuard &&that) noexcept : guard_(std::move(that.guard_)) {}
 
 auto ReadPageGuard::operator=(ReadPageGuard &&that) noexcept -> ReadPageGuard & {
+  if (this == &that) {
+    return *this;
+  }
+
+  if (guard_.page_ != nullptr) {
+    guard_.page_->RUnlatch();
+  }
   guard_ = std::move(that.guard_);
   return *this;
 }
 
-void ReadPageGuard::Drop() { guard_.Drop(); }
+void ReadPageGuard::Drop() {
+  if (guard_.page_ == nullptr) {
+    return;
+  }
+  guard_.page_->RUnlatch();
+  guard_.Drop();
+}
 
 ReadPageGuard::~ReadPageGuard() { Drop(); }  // NOLINT
 
-WritePageGuard::WritePageGuard(WritePageGuard &&that) noexcept {
-  std::lock_guard<std::mutex> self(latch_);
-  std::lock_guard<std::mutex> guard(that.latch_);
-
-  guard_ = std::move(that.guard_);
-};
+WritePageGuard::WritePageGuard(WritePageGuard &&that) noexcept : guard_(std::move(that.guard_)) {}
 
 auto WritePageGuard::operator=(WritePageGuard &&that) noexcept -> WritePageGuard & {
-  std::lock_guard<std::mutex> self(latch_);
-  std::lock_guard<std::mutex> guard(that.latch_);
+  if (this == &that) {
+    return *this;
+  }
 
-  guard_.Drop();
+  if (guard_.page_ != nullptr) {
+    guard_.page_->WUnlatch();
+    guard_.Drop();
+  }
   guard_ = std::move(that.guard_);
 
   return *this;
 }
 
 void WritePageGuard::Drop() {
-  std::lock_guard<std::mutex> guard(latch_);
+  if (guard_.page_ != nullptr) {
+    guard_.page_->WUnlatch();
+  }
   guard_.Drop();
 }
 

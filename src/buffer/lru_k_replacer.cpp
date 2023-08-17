@@ -11,7 +11,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "buffer/lru_k_replacer.h"
-#include <mutex>
 #include "common/config.h"
 #include "common/exception.h"
 #include "common/macros.h"
@@ -78,9 +77,19 @@ void LRUKReplacer::RecordAccess(frame_id_t frame_id, AccessType access_type) {
   } else {
     /* 已经是lru */
     if (node_store_[frame_id].is_lru_) {
+      node_store_[frame_id].Access(current_timestamp_++);
       lru_.erase(lru_map_[frame_id]);
-      lru_.push_back(frame_id);
-      lru_map_[frame_id] = --lru_.end();
+      auto it = lru_.begin();
+      while (it != lru_.end() && node_store_[*it].history_.front() < node_store_[frame_id].history_.front()) {
+        it++;
+      }
+      if (it == lru_.end()) {
+        lru_.push_back(frame_id);
+        lru_map_[frame_id] = --lru_.end();
+      } else {
+        lru_map_[frame_id] = lru_.insert(it, frame_id);
+      }
+      return;
     }
 
     /* 更新时间戳，如果超过k次就放进lru */
