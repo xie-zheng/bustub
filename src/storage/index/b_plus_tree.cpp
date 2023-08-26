@@ -1,10 +1,14 @@
 #include <sstream>
 #include <string>
 
+#include "common/config.h"
 #include "common/exception.h"
 #include "common/logger.h"
 #include "common/rid.h"
 #include "storage/index/b_plus_tree.h"
+#include "storage/page/b_plus_tree_header_page.h"
+#include "storage/page/b_plus_tree_page.h"
+#include "storage/page/page_guard.h"
 
 namespace bustub {
 
@@ -26,7 +30,12 @@ BPLUSTREE_TYPE::BPlusTree(std::string name, page_id_t header_page_id, BufferPool
  * Helper function to decide whether current b+tree is empty
  */
 INDEX_TEMPLATE_ARGUMENTS
-auto BPLUSTREE_TYPE::IsEmpty() const -> bool { return true; }
+auto BPLUSTREE_TYPE::IsEmpty() const -> bool {
+    return GetRootPageId() == INVALID_PAGE_ID;
+}
+
+
+
 /*****************************************************************************
  * SEARCH
  *****************************************************************************/
@@ -39,7 +48,7 @@ INDEX_TEMPLATE_ARGUMENTS
 auto BPLUSTREE_TYPE::GetValue(const KeyType &key, std::vector<ValueType> *result, Transaction *txn) -> bool {
   // Declaration of context instance.
   Context ctx;
-  (void)ctx;
+  
   return false;
 }
 
@@ -109,7 +118,11 @@ auto BPLUSTREE_TYPE::End() -> INDEXITERATOR_TYPE { return INDEXITERATOR_TYPE(); 
  * @return Page id of the root of this tree
  */
 INDEX_TEMPLATE_ARGUMENTS
-auto BPLUSTREE_TYPE::GetRootPageId() -> page_id_t { return 0; }
+auto BPLUSTREE_TYPE::GetRootPageId() const -> page_id_t {
+    ReadPageGuard guard = bpm_->FetchPageRead(header_page_id_);
+    auto root_page = guard.As<BPlusTreeHeaderPage>();
+    return root_page->root_page_id_;
+}
 
 /*****************************************************************************
  * UTILITIES AND DEBUG
