@@ -72,6 +72,15 @@ class BPlusTreeInternalPage : public BPlusTreePage {
    * @return the value at the index
    */
   auto ValueAt(int index) const -> ValueType;
+  
+  /**
+   * @brief Binary search in the page to find the next page that key maybe in
+   *
+   * @param key The key to search for
+   * @param comparator The Comparator instance for KeyType
+   * @return the next page_id to search
+   */
+  auto Get(const KeyType &key, const KeyComparator &comparator) const -> ValueType;
 
   /**
    * @brief For test only, return a string representing all keys in

@@ -7,6 +7,7 @@
 #include "common/rid.h"
 #include "storage/index/b_plus_tree.h"
 #include "storage/page/b_plus_tree_header_page.h"
+#include "storage/page/b_plus_tree_internal_page.h"
 #include "storage/page/b_plus_tree_page.h"
 #include "storage/page/page_guard.h"
 
@@ -46,10 +47,38 @@ auto BPLUSTREE_TYPE::IsEmpty() const -> bool {
  */
 INDEX_TEMPLATE_ARGUMENTS
 auto BPLUSTREE_TYPE::GetValue(const KeyType &key, std::vector<ValueType> *result, Transaction *txn) -> bool {
+  if (IsEmpty()) {
+    return false;
+  }
+
   // Declaration of context instance.
   Context ctx;
-  
-  return false;
+  ctx.root_page_id_ = GetRootPageId();
+
+  auto next_page_id = ctx.root_page_id_;
+  while (true) {
+    ReadPageGuard guard = bpm_->FetchPageRead(next_page_id);
+    auto page = guard.template As<InternalPage>();
+
+    // two options: exists or not
+    if (page->IsLeafPage()) {
+        auto leaf_page = guard.template As<LeafPage>();
+        // if key in page
+        // save the values & return true
+        // else return false
+
+        //ReadPageGuard leaf_guard = bpm_->FetchPageRead(next_page_id);
+        //auto leaf_page = leaf_guard.As<BPlusTreeLeafPage>();
+        if (auto value = leaf_page->Get(key, comparator_)) {
+            result->push_back(*value);
+            return true;
+        }
+        return false;
+    }
+
+    next_page_id = page->Get(key, comparator_);
+    // search for next page_id to find
+  }
 }
 
 /*****************************************************************************

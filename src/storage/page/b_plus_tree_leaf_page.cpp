@@ -13,6 +13,7 @@
 
 #include "common/exception.h"
 #include "common/rid.h"
+#include "storage/page/b_plus_tree_internal_page.h"
 #include "storage/page/b_plus_tree_leaf_page.h"
 #include "storage/page/b_plus_tree_page.h"
 
@@ -50,6 +51,16 @@ void B_PLUS_TREE_LEAF_PAGE_TYPE::SetNextPageId(page_id_t next_page_id) {
 INDEX_TEMPLATE_ARGUMENTS
 auto B_PLUS_TREE_LEAF_PAGE_TYPE::KeyAt(int index) const -> KeyType {
     return array_[index].first;
+}
+
+INDEX_TEMPLATE_ARGUMENTS
+auto B_PLUS_TREE_LEAF_PAGE_TYPE::Get(const KeyType &key, KeyComparator &comparator) const -> std::optional<ValueType> {
+    auto it = std::lower_bound(array_ + 1, array_ + GetSize(), key,
+                                   [&comparator](const auto &pair, auto k) { return comparator(pair.first, k) < 0; });
+    if (it == array_ + GetSize() || comparator(it->first, key) != 0) {
+        return {};
+    }
+    return it->second;
 }
 
 template class BPlusTreeLeafPage<GenericKey<4>, RID, GenericComparator<4>>;

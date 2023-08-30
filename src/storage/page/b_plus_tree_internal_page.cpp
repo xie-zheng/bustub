@@ -9,6 +9,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include <algorithm>
 #include <iostream>
 #include <sstream>
 
@@ -36,13 +37,22 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::Init(int max_size) {
  */
 INDEX_TEMPLATE_ARGUMENTS
 auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::KeyAt(int index) const -> KeyType {
-  // replace with your own code
   return array_[index].first;
 }
 
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_INTERNAL_PAGE_TYPE::SetKeyAt(int index, const KeyType &key) {
     array_[index].first = key;
+}
+
+/* 
+ * Helper function for search page_id.
+ * @output: the index of certain page_id.
+ */
+INDEX_TEMPLATE_ARGUMENTS
+auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::ValueIndex(const ValueType &value) const -> int {
+    auto it = std::find_if(array_, array_ + GetSize(), [&value](const auto &pair) { return pair.second == value; });
+    return std::distance(array_, it);
 }
 
 /*
@@ -52,6 +62,15 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::SetKeyAt(int index, const KeyType &key) {
 INDEX_TEMPLATE_ARGUMENTS
 auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::ValueAt(int index) const -> ValueType {
     return array_[index].second;
+}
+
+/*
+ */
+INDEX_TEMPLATE_ARGUMENTS
+auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::Get(const KeyType &key, const KeyComparator &comparator) const -> ValueType {
+    auto it = std::upper_bound(array_ + 1, array_ + GetSize(), key,
+                                   [&comparator](const auto &pair, auto k) { return comparator(pair.first, k) < 0; });
+    return std::prev(it)->second;
 }
 
 // valuetype for internalNode should be page id_t
