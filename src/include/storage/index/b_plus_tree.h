@@ -84,6 +84,9 @@ class BPlusTree {
   // Return the page id of the root node
   auto GetRootPageId() const -> page_id_t;
 
+  // Set the new page id of the root node
+  void SetRootPageId(page_id_t id);
+
   // Index iterator
   auto Begin() -> INDEXITERATOR_TYPE;
 

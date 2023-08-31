@@ -59,6 +59,8 @@ class BPlusTreeLeafPage : public BPlusTreePage {
   void SetNextPageId(page_id_t next_page_id);
   auto KeyAt(int index) const -> KeyType;
   auto Get(const KeyType &key, KeyComparator &comparator) const -> std::optional<ValueType>;
+  void InsertAt(int index, const KeyType &key, const ValueType &value);
+  void Insort(const KeyType &key, const ValueType &value, KeyComparator &comparator);
 
   /**
    * @brief for test only return a string representing all keys in

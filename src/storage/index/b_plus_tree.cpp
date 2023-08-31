@@ -59,16 +59,11 @@ auto BPLUSTREE_TYPE::GetValue(const KeyType &key, std::vector<ValueType> *result
   while (true) {
     ReadPageGuard guard = bpm_->FetchPageRead(next_page_id);
     auto page = guard.template As<InternalPage>();
-
+    
+    // reach leaf level
     // two options: exists or not
     if (page->IsLeafPage()) {
         auto leaf_page = guard.template As<LeafPage>();
-        // if key in page
-        // save the values & return true
-        // else return false
-
-        //ReadPageGuard leaf_guard = bpm_->FetchPageRead(next_page_id);
-        //auto leaf_page = leaf_guard.As<BPlusTreeLeafPage>();
         if (auto value = leaf_page->Get(key, comparator_)) {
             result->push_back(*value);
             return true;
@@ -76,8 +71,8 @@ auto BPLUSTREE_TYPE::GetValue(const KeyType &key, std::vector<ValueType> *result
         return false;
     }
 
-    next_page_id = page->Get(key, comparator_);
     // search for next page_id to find
+    next_page_id = page->Get(key, comparator_);
   }
 }
 
@@ -93,10 +88,52 @@ auto BPLUSTREE_TYPE::GetValue(const KeyType &key, std::vector<ValueType> *result
  */
 INDEX_TEMPLATE_ARGUMENTS
 auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transaction *txn) -> bool {
+  if (IsEmpty()) {
+    page_id_t new_root_page_id;
+    auto new_root = bpm_->NewPageGuarded(&new_root_page_id);  
+    auto leaf_page = new_root.AsMut<LeafPage>();
+    leaf_page->InsertAt(0, key, value);
+    bpm_->FlushPage(new_root_page_id);
+    SetRootPageId(new_root_page_id);
+    return true;
+  }
+
   // Declaration of context instance.
   Context ctx;
-  (void)ctx;
-  return false;
+  ctx.root_page_id_ = GetRootPageId();
+
+  auto next_page_id = ctx.root_page_id_;
+  while (true) {
+    WritePageGuard guard = bpm_->FetchPageWrite(next_page_id);
+    auto page = guard.template As<InternalPage>();
+    
+    if (page->IsLeafPage()) {
+        auto leaf_page = guard.template AsMut<LeafPage>();
+        // key already exists
+        if (auto value = leaf_page->Get(key, comparator_)) {
+            return false;
+        }
+
+        // page not full, insert and go
+        if (leaf_page->GetSize() < leaf_page->GetMaxSize()) {
+            leaf_page->Insort(key, value, comparator_);
+            return true;
+        } 
+
+        // page full, split(and maybe recursive)
+        // 1. NewPage
+        // 2. check the key will stay or move to NewPage
+        // 3. move half the data to new page
+        // 4. insert the value in to new or old page
+        // 5. insert new page to parent(pop the parent from write_set_)
+        // 6. if parent is full, do split recursively
+        return false;
+    }
+
+    ctx.write_set_.push_back(guard);
+    // search for next page_id to find
+    next_page_id = page->Get(key, comparator_);
+  }
 }
 
 /*****************************************************************************
@@ -151,6 +188,13 @@ auto BPLUSTREE_TYPE::GetRootPageId() const -> page_id_t {
     ReadPageGuard guard = bpm_->FetchPageRead(header_page_id_);
     auto root_page = guard.As<BPlusTreeHeaderPage>();
     return root_page->root_page_id_;
+}
+
+INDEX_TEMPLATE_ARGUMENTS
+void BPLUSTREE_TYPE::SetRootPageId(page_id_t id) {
+    WritePageGuard guard = bpm_->FetchPageWrite(header_page_id_);
+    auto root_page = guard.AsMut<BPlusTreeHeaderPage>();
+    root_page->root_page_id_ = id;
 }
 
 /*****************************************************************************

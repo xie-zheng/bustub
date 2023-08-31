@@ -9,7 +9,9 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include <algorithm>
 #include <sstream>
+#include <utility>
 
 #include "common/exception.h"
 #include "common/rid.h"
@@ -55,12 +57,30 @@ auto B_PLUS_TREE_LEAF_PAGE_TYPE::KeyAt(int index) const -> KeyType {
 
 INDEX_TEMPLATE_ARGUMENTS
 auto B_PLUS_TREE_LEAF_PAGE_TYPE::Get(const KeyType &key, KeyComparator &comparator) const -> std::optional<ValueType> {
-    auto it = std::lower_bound(array_ + 1, array_ + GetSize(), key,
+    auto it = std::lower_bound(array_, array_ + GetSize(), key,
                                    [&comparator](const auto &pair, auto k) { return comparator(pair.first, k) < 0; });
     if (it == array_ + GetSize() || comparator(it->first, key) != 0) {
         return {};
     }
     return it->second;
+}
+
+INDEX_TEMPLATE_ARGUMENTS
+void B_PLUS_TREE_LEAF_PAGE_TYPE::InsertAt(int index, const KeyType &key, const ValueType &value) {
+    auto i = GetSize();
+    while (i != index) {
+        array_[i--] = array_[i-1];
+    }
+    array_[index] = std::make_pair(key, value);
+    IncreaseSize(1);
+}
+
+INDEX_TEMPLATE_ARGUMENTS
+void B_PLUS_TREE_LEAF_PAGE_TYPE::Insort(const KeyType &key, const ValueType &value, KeyComparator &comparator) {
+    auto it = std::lower_bound(array_, array_ + GetSize(), key,
+            [&comparator](const auto &pair, auto k) { return comparator(pair.first, k) < 0; });
+    auto index = std::distance(array_, it);
+    InsertAt(index, key, value);
 }
 
 template class BPlusTreeLeafPage<GenericKey<4>, RID, GenericComparator<4>>;
