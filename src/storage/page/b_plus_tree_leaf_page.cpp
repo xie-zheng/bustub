@@ -10,6 +10,7 @@
 //===----------------------------------------------------------------------===//
 
 #include <algorithm>
+#include <iterator>
 #include <sstream>
 #include <utility>
 
@@ -56,13 +57,19 @@ auto B_PLUS_TREE_LEAF_PAGE_TYPE::KeyAt(int index) const -> KeyType {
 }
 
 INDEX_TEMPLATE_ARGUMENTS
-auto B_PLUS_TREE_LEAF_PAGE_TYPE::Get(const KeyType &key, KeyComparator &comparator) const -> std::optional<ValueType> {
+auto B_PLUS_TREE_LEAF_PAGE_TYPE::Index(const KeyType &key, KeyComparator &comparator) const -> int {
     auto it = std::lower_bound(array_, array_ + GetSize(), key,
-                                   [&comparator](const auto &pair, auto k) { return comparator(pair.first, k) < 0; });
-    if (it == array_ + GetSize() || comparator(it->first, key) != 0) {
+            [&comparator](const auto &pair, auto k) { return comparator(pair.first, k) < 0; });
+    return std::distance(array_, it);
+}
+
+INDEX_TEMPLATE_ARGUMENTS
+auto B_PLUS_TREE_LEAF_PAGE_TYPE::Get(const KeyType &key, KeyComparator &comparator) const -> std::optional<ValueType> {
+    auto i = Index(key, comparator);
+    if (i == GetSize() || comparator(array_[i].first, key) != 0) {
         return {};
     }
-    return it->second;
+    return array_[i].second;
 }
 
 INDEX_TEMPLATE_ARGUMENTS
@@ -77,11 +84,22 @@ void B_PLUS_TREE_LEAF_PAGE_TYPE::InsertAt(int index, const KeyType &key, const V
 
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_LEAF_PAGE_TYPE::Insort(const KeyType &key, const ValueType &value, KeyComparator &comparator) {
-    auto it = std::lower_bound(array_, array_ + GetSize(), key,
-            [&comparator](const auto &pair, auto k) { return comparator(pair.first, k) < 0; });
-    auto index = std::distance(array_, it);
-    InsertAt(index, key, value);
+    InsertAt(Index(key, comparator), key, value);
 }
+
+
+INDEX_TEMPLATE_ARGUMENTS
+void B_PLUS_TREE_LEAF_PAGE_TYPE::Split(B_PLUS_TREE_LEAF_PAGE_TYPE *other) {
+    int j = 0;
+    int mid = GetMaxSize() / 2;
+    // copy the item of right half to the splited new leaf_node
+    for (int i = mid; i < GetMaxSize(); i++, j++) {
+        std::swap(array_[i], other->array_[j]);
+    }
+    IncreaseSize(-j);
+    other->IncreaseSize(j);
+}
+
 
 template class BPlusTreeLeafPage<GenericKey<4>, RID, GenericComparator<4>>;
 template class BPlusTreeLeafPage<GenericKey<8>, RID, GenericComparator<8>>;

@@ -73,6 +73,11 @@ class BPlusTreeInternalPage : public BPlusTreePage {
    */
   auto ValueAt(int index) const -> ValueType;
   
+  /* actually lower bound */
+  auto Index(const KeyType &key, KeyComparator &comparator) const -> int;
+  void InsertAt(int index, const KeyType &key, const ValueType &value);
+  void Insort(const KeyType &key, const ValueType &value, KeyComparator &comparator);
+
   /**
    * @brief Binary search in the page to find the next page that key maybe in
    *
@@ -81,6 +86,8 @@ class BPlusTreeInternalPage : public BPlusTreePage {
    * @return the next page_id to search
    */
   auto Get(const KeyType &key, const KeyComparator &comparator) const -> ValueType;
+
+  void Split(B_PLUS_TREE_INTERNAL_PAGE_TYPE *other);
 
   /**
    * @brief For test only, return a string representing all keys in
