@@ -33,11 +33,7 @@ BPLUSTREE_TYPE::BPlusTree(std::string name, page_id_t header_page_id, BufferPool
  * Helper function to decide whether current b+tree is empty
  */
 INDEX_TEMPLATE_ARGUMENTS
-auto BPLUSTREE_TYPE::IsEmpty() const -> bool {
-    return GetRootPageId() == INVALID_PAGE_ID;
-}
-
-
+auto BPLUSTREE_TYPE::IsEmpty() const -> bool { return GetRootPageId() == INVALID_PAGE_ID; }
 
 /*****************************************************************************
  * SEARCH
@@ -61,16 +57,16 @@ auto BPLUSTREE_TYPE::GetValue(const KeyType &key, std::vector<ValueType> *result
   while (true) {
     ReadPageGuard guard = bpm_->FetchPageRead(next_page_id);
     auto page = guard.template As<InternalPage>();
-    
+
     // reach leaf level
     // two options: exists or not
     if (page->IsLeafPage()) {
-        auto leaf_page = guard.template As<LeafPage>();
-        if (auto value = leaf_page->Get(key, comparator_)) {
-            result->push_back(*value);
-            return true;
-        }
-        return false;
+      auto leaf_page = guard.template As<LeafPage>();
+      if (auto value = leaf_page->Get(key, comparator_)) {
+        result->push_back(*value);
+        return true;
+      }
+      return false;
     }
 
     // search for next page_id to find
@@ -92,7 +88,7 @@ INDEX_TEMPLATE_ARGUMENTS
 auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transaction *txn) -> bool {
   if (IsEmpty()) {
     page_id_t new_root_page_id;
-    auto new_root = bpm_->NewPageGuarded(&new_root_page_id);  
+    auto new_root = bpm_->NewPageGuarded(&new_root_page_id);
     auto leaf_page = new_root.AsMut<LeafPage>();
     leaf_page->InsertAt(0, key, value);
     bpm_->FlushPage(new_root_page_id);
@@ -111,69 +107,68 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
     // assume that there will be a split
     WritePageGuard guard = bpm_->FetchPageWrite(next_page_id);
     auto page = guard.template As<InternalPage>();
-    
+
     if (page->IsLeafPage()) {
-        auto leaf_page = guard.template AsMut<LeafPage>();
-        // key already exists
-        if (auto value = leaf_page->Get(key, comparator_)) {
-            return false;
-        }
+      auto leaf_page = guard.template AsMut<LeafPage>();
+      // key already exists
+      if (auto value = leaf_page->Get(key, comparator_)) {
+        return false;
+      }
 
-        leaf_page->Insort(key, value, comparator_);
-        // page not full, insert and go
-        if (leaf_page->GetSize() < leaf_page->GetMaxSize()) {
-            return true;
-        } 
-
-        // page full, split(and maybe recursive)
-        // 1. NewPage
-        page_id_t right = INVALID_PAGE_ID;
-        auto right_guard = bpm_->NewPageGuarded(&right);
-        auto right_page= right_guard.AsMut<LeafPage>();
-
-        // 2. move half the data to new page
-        leaf_page->Split(right_page);
-        
-        page_id_t page_to_insert = right;
-        KeyType key_to_insert = right_page->KeyAt(0);
-        bool need_insert = true;
-        while (need_insert) {
-            if (ctx.write_set_.empty()) {
-                // need to insert a new root
-                page_id_t new_root_page_id;
-                auto new_root = bpm_->NewPageGuarded(&new_root_page_id);  
-                auto root_page = new_root.AsMut<InternalPage>();
-          
-                // INVALID      3
-                // (1, 2)     (3, 5)
-                // Actually, I dont care what is the key in index 0
-                root_page->InsertAt(0, key_to_insert, next_page_id);
-                root_page->InsertAt(1, key_to_insert, page_to_insert);
-                
-                bpm_->FlushPage(new_root_page_id);
-                SetRootPageId(new_root_page_id);
-                return true;
-            }
-
-            // 3. insert new page to parent(pop the parent from write_set_)
-            WritePageGuard parent = std::move(ctx.write_set_.back());
-            ctx.write_set_.pop_back();
-
-            auto parent_page = parent.AsMut<InternalPage>();
-            parent_page->Insort(key_to_insert, page_to_insert, comparator_);
-
-            need_insert = false;
-            // 4. if parent is full, do split recursively
-            if (parent_page->GetSize() == parent_page->GetMaxSize()) {
-                auto new_guard = bpm_->NewPageGuarded(&page_to_insert);
-                auto new_page = guard.AsMut<InternalPage>();
-                parent_page->Split(new_page);
-                key_to_insert = new_page->KeyAt(0);
-                need_insert = true;
-            }
-
-        }
+      leaf_page->Insort(key, value, comparator_);
+      // page not full, insert and go
+      if (leaf_page->GetSize() < leaf_page->GetMaxSize()) {
         return true;
+      }
+
+      // page full, split(and maybe recursive)
+      // 1. NewPage
+      page_id_t right = INVALID_PAGE_ID;
+      auto right_guard = bpm_->NewPageGuarded(&right);
+      auto right_page = right_guard.AsMut<LeafPage>();
+
+      // 2. move half the data to new page
+      leaf_page->Split(right_page);
+
+      page_id_t page_to_insert = right;
+      KeyType key_to_insert = right_page->KeyAt(0);
+      bool need_insert = true;
+      while (need_insert) {
+        if (ctx.write_set_.empty()) {
+          // need to insert a new root
+          page_id_t new_root_page_id;
+          auto new_root = bpm_->NewPageGuarded(&new_root_page_id);
+          auto root_page = new_root.AsMut<InternalPage>();
+
+          // INVALID      3
+          // (1, 2)     (3, 5)
+          // Actually, I dont care what is the key in index 0
+          root_page->InsertAt(0, key_to_insert, next_page_id);
+          root_page->InsertAt(1, key_to_insert, page_to_insert);
+
+          bpm_->FlushPage(new_root_page_id);
+          SetRootPageId(new_root_page_id);
+          return true;
+        }
+
+        // 3. insert new page to parent(pop the parent from write_set_)
+        WritePageGuard parent = std::move(ctx.write_set_.back());
+        ctx.write_set_.pop_back();
+
+        auto parent_page = parent.AsMut<InternalPage>();
+        parent_page->Insort(key_to_insert, page_to_insert, comparator_);
+
+        need_insert = false;
+        // 4. if parent is full, do split recursively
+        if (parent_page->GetSize() == parent_page->GetMaxSize()) {
+          auto new_guard = bpm_->NewPageGuarded(&page_to_insert);
+          auto new_page = guard.AsMut<InternalPage>();
+          parent_page->Split(new_page);
+          key_to_insert = new_page->KeyAt(0);
+          need_insert = true;
+        }
+      }
+      return true;
     }
 
     // empty slot >= 2 so the insert wont need split
@@ -182,7 +177,7 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
       ctx.write_set_.clear();
       released = true;
     }
-    
+
     ctx.write_set_.push_back(guard);
     // search for next page_id to find
     next_page_id = page->Get(key, comparator_);
@@ -238,16 +233,16 @@ auto BPLUSTREE_TYPE::End() -> INDEXITERATOR_TYPE { return INDEXITERATOR_TYPE(); 
  */
 INDEX_TEMPLATE_ARGUMENTS
 auto BPLUSTREE_TYPE::GetRootPageId() const -> page_id_t {
-    ReadPageGuard guard = bpm_->FetchPageRead(header_page_id_);
-    auto root_page = guard.As<BPlusTreeHeaderPage>();
-    return root_page->root_page_id_;
+  ReadPageGuard guard = bpm_->FetchPageRead(header_page_id_);
+  auto root_page = guard.As<BPlusTreeHeaderPage>();
+  return root_page->root_page_id_;
 }
 
 INDEX_TEMPLATE_ARGUMENTS
 void BPLUSTREE_TYPE::SetRootPageId(page_id_t id) {
-    WritePageGuard guard = bpm_->FetchPageWrite(header_page_id_);
-    auto root_page = guard.AsMut<BPlusTreeHeaderPage>();
-    root_page->root_page_id_ = id;
+  WritePageGuard guard = bpm_->FetchPageWrite(header_page_id_);
+  auto root_page = guard.AsMut<BPlusTreeHeaderPage>();
+  root_page->root_page_id_ = id;
 }
 
 /*****************************************************************************

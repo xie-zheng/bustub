@@ -72,7 +72,7 @@ class BPlusTreeInternalPage : public BPlusTreePage {
    * @return the value at the index
    */
   auto ValueAt(int index) const -> ValueType;
-  
+
   /* actually lower bound */
   auto Index(const KeyType &key, KeyComparator &comparator) const -> int;
   void InsertAt(int index, const KeyType &key, const ValueType &value);
